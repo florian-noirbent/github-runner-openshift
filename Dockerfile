@@ -13,6 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     tar \
     gzip \
+    python3 \
+    python3-pip \
+    python3-venv \
+    nodejs \
+    npm \
+    build-essential \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root runner user (UID 1001 for OpenShift SCC compatibility)
@@ -36,6 +43,20 @@ RUN curl -fsSL -o oc.tar.gz \
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# Pre-populate Python 3.11 in the actions tool cache so setup-python finds it locally
+ARG PYTHON_VERSION=3.11.15
+RUN mkdir -p /home/runner/_work/_tool/Python/${PYTHON_VERSION}/x64 \
+    && curl -fsSL -o /tmp/python.tar.gz \
+       "https://github.com/actions/python-versions/releases/download/${PYTHON_VERSION}-22631496413/python-${PYTHON_VERSION}-linux-22.04-x64.tar.gz" \
+    && tar xzf /tmp/python.tar.gz -C /home/runner/_work/_tool/Python/${PYTHON_VERSION}/x64 --strip-components=1 \
+    && rm /tmp/python.tar.gz \
+    && touch /home/runner/_work/_tool/Python/${PYTHON_VERSION}/x64.complete
+
+# Install pipx via pip, then install poetry via pipx
+ENV PATH="/home/runner/.local/bin:${PATH}"
+RUN python3 -m pip install --no-cache-dir pipx \
+    && pipx install poetry
 
 # Fix permissions for OpenShift (group 0 needs write access)
 RUN chown -R 1001:0 /home/runner && chmod -R g=u /home/runner
