@@ -4,7 +4,7 @@ A generic, reusable container image that runs a GitHub Actions self-hosted runne
 
 ## What's inside
 
-- GitHub Actions Runner v2.322.0
+- GitHub Actions Runner v2.333.1
 - OpenShift `oc` CLI v4.14
 - Runs as non-root (UID 1001), compatible with OpenShift restricted SCC
 - Ephemeral mode: each job gets a clean runner, auto-deregisters after completion
