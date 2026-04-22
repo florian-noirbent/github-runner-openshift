@@ -86,7 +86,6 @@ echo "Configuring runner: ${RUNNER_NAME}"
     --runnergroup "$RUNNER_GROUP" \
     --work "$RUNNER_WORKDIR" \
     --unattended \
-    --ephemeral \
     --replace
 
 unset REG_TOKEN

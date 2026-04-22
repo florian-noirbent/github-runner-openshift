@@ -2,10 +2,13 @@ FROM ubuntu:22.04
 
 ARG RUNNER_VERSION=2.333.1
 ARG OC_VERSION=4.14
+ARG PYTHON_VERSION=3.11.15
+ARG NODE_VERSION=24.11.0
+ARG POETRY_VERSION=2.1.4
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies
+# Install dependencies (no nodejs/npm — Node 24 comes from the actions tool cache below)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -13,11 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     tar \
     gzip \
+    xz-utils \
     python3 \
     python3-pip \
     python3-venv \
-    nodejs \
-    npm \
     build-essential \
     cmake \
     && rm -rf /var/lib/apt/lists/*
@@ -45,7 +47,6 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Pre-populate Python 3.11 in the actions tool cache so setup-python finds it locally
-ARG PYTHON_VERSION=3.11.15
 RUN mkdir -p /home/runner/_work/_tool/Python/${PYTHON_VERSION}/x64 \
     && curl -fsSL -o /tmp/python.tar.gz \
        "https://github.com/actions/python-versions/releases/download/${PYTHON_VERSION}-22631496413/python-${PYTHON_VERSION}-linux-22.04-x64.tar.gz" \
@@ -53,10 +54,19 @@ RUN mkdir -p /home/runner/_work/_tool/Python/${PYTHON_VERSION}/x64 \
     && rm /tmp/python.tar.gz \
     && touch /home/runner/_work/_tool/Python/${PYTHON_VERSION}/x64.complete
 
-# Install pipx via pip, then install poetry via pipx
-ENV PATH="/home/runner/.local/bin:${PATH}"
-RUN python3 -m pip install --no-cache-dir pipx \
-    && pipx install poetry
+# Pre-populate Node.js in the actions tool cache so setup-node finds it locally
+RUN mkdir -p /home/runner/_work/_tool/node/${NODE_VERSION}/x64 \
+    && curl -fsSL -o /tmp/node.tar.xz \
+       "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+    && tar xJf /tmp/node.tar.xz -C /home/runner/_work/_tool/node/${NODE_VERSION}/x64 --strip-components=1 \
+    && rm /tmp/node.tar.xz \
+    && touch /home/runner/_work/_tool/node/${NODE_VERSION}/x64.complete
+
+# Install Poetry system-wide, pinned. Uses the apt-installed python3 (Ubuntu 22.04's 3.10)
+# to produce the entry point; poetry auto-selects the project's Python 3.11 at runtime
+# (the pre-populated tool cache is unpacked by setup-python@v6).
+RUN python3 -m pip install --no-cache-dir poetry==${POETRY_VERSION} \
+    && poetry --version
 
 # Fix permissions for OpenShift (group 0 needs write access)
 RUN chown -R 1001:0 /home/runner && chmod -R g=u /home/runner
