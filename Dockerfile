@@ -8,20 +8,28 @@ ARG POETRY_VERSION=2.1.4
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install dependencies (no nodejs/npm — Node 24 comes from the actions tool cache below)
+# Install dependencies (no nodejs/npm — Node 24 comes from the actions tool cache below).
+# Python 3.11 from deadsnakes (explicit key import — add-apt-repository fails in Docker).
+# get-pip.py is used because ensurepip is disabled on Debian/Ubuntu system Pythons.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    gnupg2 \
     jq \
     git \
     tar \
     gzip \
     xz-utils \
-    python3 \
-    python3-pip \
-    python3-venv \
     build-essential \
     cmake \
+    && gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys F23C5A6CF475977595C89F51BA6932366A755776 \
+    && gpg --export F23C5A6CF475977595C89F51BA6932366A755776 > /etc/apt/trusted.gpg.d/deadsnakes.gpg \
+    && echo "deb https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy main" > /etc/apt/sources.list.d/deadsnakes.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-venv \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
+    && curl -fsSL https://bootstrap.pypa.io/get-pip.py | python3.11 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root runner user (UID 1001 for OpenShift SCC compatibility)
@@ -62,11 +70,12 @@ RUN mkdir -p /home/runner/_work/_tool/node/${NODE_VERSION}/x64 \
     && rm /tmp/node.tar.xz \
     && touch /home/runner/_work/_tool/node/${NODE_VERSION}/x64.complete
 
-# Install Poetry system-wide, pinned. Uses the apt-installed python3 (Ubuntu 22.04's 3.10)
-# to produce the entry point; poetry auto-selects the project's Python 3.11 at runtime
-# (the pre-populated tool cache is unpacked by setup-python@v6).
-RUN python3 -m pip install --no-cache-dir poetry==${POETRY_VERSION} \
-    && poetry --version
+# Install Poetry system-wide (pinned) via pip so `/usr/local/bin/poetry` is available
+# to any runtime user. Also install pipx system-wide for CI fallback paths that still
+# do `pipx install poetry==<version>` during transition to this image.
+RUN python3 -m pip install --no-cache-dir poetry==${POETRY_VERSION} pipx \
+    && poetry --version \
+    && pipx --version
 
 # Fix permissions for OpenShift (group 0 needs write access)
 RUN chown -R 1001:0 /home/runner && chmod -R g=u /home/runner
